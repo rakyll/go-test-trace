@@ -7,15 +7,13 @@
 package main
 
 import (
-	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
-	"regexp"
-	"strings"
+	"os/exec"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -27,45 +25,26 @@ import (
 	"google.golang.org/grpc"
 )
 
+var danglingSpans = make(map[string]*spanData, 1000)
+
 func main() {
 	endpoint := flag.String("endpoint", "127.0.0.1:55680", "OpenTelemetry gRPC endpoint to send traces")
+	stdin := flag.Bool("stdin", false, "read from stdin")
 	flag.Parse()
 
-	t, err := newTracer(*endpoint)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := t.Parse(os.Stdin); err != nil {
-		log.Fatal(err)
-	}
-}
-
-type tracer struct {
-	globalCtx     context.Context
-	tracer        oteltrace.Tracer
-	traceProvider *sdktrace.TracerProvider
-	spans         map[string]*spanData
-}
-
-type spanData struct {
-	span      oteltrace.Span
-	startTime time.Time
-}
-
-func newTracer(endpoint string) (*tracer, error) {
 	ctx := context.Background()
 	traceExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(endpoint),
+		otlptracegrpc.WithEndpoint(*endpoint),
 		otlptracegrpc.WithDialOption(grpc.WithBlock()),
 	)
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
 	res, err := resource.New(ctx, resource.WithAttributes(attribute.String("service.name", "go test")))
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
@@ -75,99 +54,67 @@ func newTracer(endpoint string) (*tracer, error) {
 	otel.SetTracerProvider(tracerProvider)
 
 	t := otel.Tracer("go-test-tracer")
-	globalCtx, _ := t.Start(ctx, "go-test-otel")
-	return &tracer{
-		globalCtx:     globalCtx,
-		tracer:        t,
-		traceProvider: tracerProvider,
-		spans:         make(map[string]*spanData, 1000),
-	}, nil
-}
+	globalCtx, _ := t.Start(ctx, "go-test-trace")
 
-func (t *tracer) Parse(r io.Reader) error {
-	reader := bufio.NewReader(r)
-	for {
-		l, _, err := reader.ReadLine()
-		if err == io.EOF {
-			oteltrace.SpanFromContext(t.globalCtx).End()
-			t.traceProvider.Shutdown(context.Background())
-			return nil
-		}
+	if *stdin {
+		t, err := newParser(*endpoint)
 		if err != nil {
-			return err
+			log.Fatal(err)
 		}
-		t.parse(string(l))
-	}
-}
-
-func (t *tracer) parse(line string) {
-	defer fmt.Printf("%s\n", line)
-
-	trimmed := strings.TrimSpace(line)
-
-	switch {
-	case strings.HasPrefix(trimmed, "ok"):
-		// Do nothing.
-	case strings.HasPrefix(trimmed, "PASS"):
-		// Do nothing.
-	case strings.HasPrefix(trimmed, "FAIL"):
-		// Do nothing.
-	case strings.Contains(trimmed, "[no test files]"):
-		// TODO(jbd): Annotate.
-	case strings.HasPrefix(trimmed, "--- SKIP"):
-		// TODO(jbd): Annotate.
-
-		// start segment
-	case strings.HasPrefix(trimmed, "=== RUN"):
-		t.start(trimmed)
-
-		// finished
-	case strings.HasPrefix(trimmed, "--- PASS"):
-		fallthrough
-	case strings.HasPrefix(trimmed, "ok"):
-		t.end(trimmed, false)
-
-		// failed
-	case strings.HasPrefix(trimmed, "--- FAIL"):
-		// end segment with error
-		t.end(trimmed, true)
-	}
-
-}
-
-func (t *tracer) start(line string) error {
-	name := parseName(line)
-	_, span := t.tracer.Start(t.globalCtx, name)
-	t.spans[name] = &spanData{
-		span:      span,
-		startTime: time.Now(),
-	}
-	return nil
-}
-
-func (t *tracer) end(line string, errored bool) {
-	name, dur := parseNameAndDuration(line)
-	data, ok := t.spans[name]
-	if !ok {
+		if err := t.Parse(os.Stdin); err != nil {
+			log.Fatal(err)
+		}
 		return
 	}
-	data.span.End(oteltrace.WithTimestamp(data.startTime.Add(dur)))
+
+	// Otherwise, act like a drop-in replacement for `go test`.
+	args := append([]string{"test"}, flag.Args()...)
+	args = append(args, "-json")
+	cmd := exec.Command("go", args...)
+
+	r, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+	decoder := json.NewDecoder(r)
+	go func() {
+		for {
+			var data goTestJSON
+			if err := decoder.Decode(&data); err != nil {
+				log.Fatal(err)
+			}
+			switch data.Action {
+			case "run":
+				var span oteltrace.Span
+				_, span = t.Start(globalCtx, data.Test, oteltrace.WithTimestamp(data.Time))
+				danglingSpans[data.Test] = &spanData{
+					span:      span,
+					startTime: data.Time,
+				}
+			case "pass", "fail", "skip":
+				span, ok := danglingSpans[data.Test]
+				if !ok {
+					return // should never happen
+				}
+				span.span.End(oteltrace.WithTimestamp(data.Time))
+			}
+			fmt.Print(data.Output)
+		}
+	}()
+
+	err = cmd.Run()
+	oteltrace.SpanFromContext(globalCtx).End()
+	if err := tracerProvider.Shutdown(context.Background()); err != nil {
+		log.Printf("Failed shutting down the tracer provider: %v", err)
+	}
+	if err != nil {
+		os.Exit(1)
+	}
 }
 
-func parseName(line string) string {
-	return testNameRegex.FindAllStringSubmatch(line, -1)[0][0]
+type goTestJSON struct {
+	Time   time.Time
+	Action string
+	Test   string
+	Output string
 }
-
-func parseNameAndDuration(line string) (string, time.Duration) {
-	m := testNameWithDurationRegex.FindAllStringSubmatch(line, -1)
-	name := m[0][1]
-	duration := m[0][2]
-
-	dur, _ := time.ParseDuration(duration)
-	return name, dur
-}
-
-var (
-	testNameRegex             = regexp.MustCompile(`(Test.+)`)
-	testNameWithDurationRegex = regexp.MustCompile(`(Test.+)\s\(([\w|\.]+)\)`)
-)

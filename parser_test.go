@@ -13,18 +13,26 @@ import (
 
 func TestParseNameAndDuration(t *testing.T) {
 	tests := []struct {
-		line     string
-		wantName string
-		wantDur  string
+		description string
+		line        string
+		wantName    string
+		wantDur     string
 	}{
 		{
-			line:     "    --- PASS: TestGetConfig/otlp#01 (1.50s)",
-			wantName: "TestGetConfig/otlp#01",
-			wantDur:  "1.5s",
+			description: "pass sub test",
+			line:        "    --- PASS: TestGetConfig/otlp#01 (1.50s)",
+			wantName:    "TestGetConfig/otlp#01",
+			wantDur:     "1.5s",
+		},
+		{
+			description: "fail sub test",
+			line:        "    --- FAIL: TestGetConfig/otlp#01 (1.50s)",
+			wantName:    "TestGetConfig/otlp#01",
+			wantDur:     "1.5s",
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.line, func(t *testing.T) {
+		t.Run(tt.description, func(t *testing.T) {
 			name, dur := parseNameAndDuration(tt.line)
 			if name != tt.wantName {
 				t.Errorf("parseNameAndDuration() name = %v, want %v", name, tt.wantName)
