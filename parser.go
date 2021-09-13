@@ -14,13 +14,14 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
+
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
 type tracer struct {
@@ -46,7 +47,9 @@ func newParser(endpoint string) (*tracer, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := resource.New(ctx, resource.WithAttributes(attribute.String("service.name", "go test")))
+	res, err := resource.New(ctx, resource.WithAttributes(
+		semconv.ServiceNameKey.String("go test"),
+	))
 	if err != nil {
 		return nil, err
 	}
