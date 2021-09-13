@@ -1,4 +1,4 @@
-module github.com/rakyll/go-test-xray
+module github.com/rakyll/go-test-trace
 
 go 1.14
 
