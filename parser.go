@@ -13,80 +13,37 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	oteltrace "go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
-
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
-type tracer struct {
-	globalCtx     context.Context
-	tracer        oteltrace.Tracer
-	traceProvider *sdktrace.TracerProvider
-	spans         map[string]*spanData
+type parser struct {
+	globalCtx context.Context
+	tracer    oteltrace.Tracer
 }
 
-type spanData struct {
-	span      oteltrace.Span
-	startTime time.Time
-}
-
-func newParser(endpoint string) (*tracer, error) {
-	ctx := context.Background()
-	traceExporter, err := otlptracegrpc.New(
-		ctx,
-		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(endpoint),
-		otlptracegrpc.WithDialOption(grpc.WithBlock()),
-	)
-	if err != nil {
-		return nil, err
-	}
-	res, err := resource.New(ctx, resource.WithAttributes(
-		semconv.ServiceNameKey.String("go test"),
-	))
-	if err != nil {
-		return nil, err
-	}
-	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithSpanProcessor(sdktrace.NewBatchSpanProcessor(traceExporter)),
-		sdktrace.WithResource(res),
-	)
-	otel.SetTracerProvider(tracerProvider)
-
-	t := otel.Tracer("go-test-tracer")
-	globalCtx, _ := t.Start(ctx, "go-test-otel")
-	return &tracer{
-		globalCtx:     globalCtx,
-		tracer:        t,
-		traceProvider: tracerProvider,
-		spans:         make(map[string]*spanData, 1000),
+func newParser(ctx context.Context, tracer oteltrace.Tracer) (*parser, error) {
+	return &parser{
+		globalCtx: ctx,
+		tracer:    tracer,
 	}, nil
 }
 
-func (t *tracer) Parse(r io.Reader) error {
+func (p *parser) parse(r io.Reader) error {
 	reader := bufio.NewReader(r)
 	for {
 		l, _, err := reader.ReadLine()
 		if err == io.EOF {
-			oteltrace.SpanFromContext(t.globalCtx).End()
-			t.traceProvider.Shutdown(context.Background())
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		t.parse(string(l))
+		p.parseLine(string(l))
 	}
 }
 
-func (t *tracer) parse(line string) {
+func (p *parser) parseLine(line string) {
 	defer fmt.Printf("%s\n", line)
 
 	trimmed := strings.TrimSpace(line)
@@ -105,35 +62,35 @@ func (t *tracer) parse(line string) {
 
 		// start segment
 	case strings.HasPrefix(trimmed, "=== RUN"):
-		t.start(trimmed)
+		p.start(trimmed)
 
 		// finished
 	case strings.HasPrefix(trimmed, "--- PASS"):
 		fallthrough
 	case strings.HasPrefix(trimmed, "ok"):
-		t.end(trimmed, false)
+		p.end(trimmed, false)
 
 		// failed
 	case strings.HasPrefix(trimmed, "--- FAIL"):
 		// end segment with error
-		t.end(trimmed, true)
+		p.end(trimmed, true)
 	}
 
 }
 
-func (t *tracer) start(line string) error {
+func (p *parser) start(line string) error {
 	name := parseName(line)
-	_, span := t.tracer.Start(t.globalCtx, name)
-	t.spans[name] = &spanData{
+	_, span := p.tracer.Start(p.globalCtx, name)
+	danglingSpans[name] = &spanData{
 		span:      span,
 		startTime: time.Now(),
 	}
 	return nil
 }
 
-func (t *tracer) end(line string, errored bool) {
+func (p *parser) end(line string, errored bool) {
 	name, dur := parseNameAndDuration(line)
-	data, ok := t.spans[name]
+	data, ok := danglingSpans[name]
 	if !ok {
 		return
 	}

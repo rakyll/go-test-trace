@@ -25,6 +25,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+type spanData struct {
+	span      oteltrace.Span
+	startTime time.Time
+}
+
 var danglingSpans = make(map[string]*spanData, 1000)
 
 func main() {
@@ -56,12 +61,19 @@ func main() {
 	t := otel.Tracer("go-test-tracer")
 	globalCtx, _ := t.Start(ctx, "go-test-trace")
 
+	defer func() {
+		oteltrace.SpanFromContext(globalCtx).End()
+		if err := tracerProvider.Shutdown(context.Background()); err != nil {
+			log.Printf("Failed shutting down the tracer provider: %v", err)
+		}
+	}()
+
 	if *stdin {
-		t, err := newParser(*endpoint)
+		p, err := newParser(globalCtx, t)
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err := t.Parse(os.Stdin); err != nil {
+		if err := p.parse(os.Stdin); err != nil {
 			log.Fatal(err)
 		}
 		return
