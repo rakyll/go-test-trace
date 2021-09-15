@@ -23,10 +23,7 @@ type parser struct {
 }
 
 func newParser(ctx context.Context, tracer oteltrace.Tracer) (*parser, error) {
-	return &parser{
-		globalCtx: ctx,
-		tracer:    tracer,
-	}, nil
+	return &parser{globalCtx: ctx, tracer: tracer}, nil
 }
 
 func (p *parser) parse(r io.Reader) error {
@@ -95,7 +92,7 @@ func (p *parser) end(line string, errored bool) {
 		return
 	}
 	if errored {
-		data.span.SetStatus(codes.Error, "test failed")
+		data.span.SetStatus(codes.Error, "")
 	}
 	data.span.End(oteltrace.WithTimestamp(data.startTime.Add(dur)))
 }

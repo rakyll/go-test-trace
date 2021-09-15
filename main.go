@@ -18,6 +18,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -103,11 +104,14 @@ func main() {
 					startTime: data.Time,
 				}
 			case "pass", "fail", "skip":
-				span, ok := danglingSpans[data.Test]
+				spanData, ok := danglingSpans[data.Test]
 				if !ok {
 					return // should never happen
 				}
-				span.span.End(oteltrace.WithTimestamp(data.Time))
+				if data.Action == "fail" {
+					spanData.span.SetStatus(codes.Error, "")
+				}
+				spanData.span.End(oteltrace.WithTimestamp(data.Time))
 			}
 			fmt.Print(data.Output)
 		}
