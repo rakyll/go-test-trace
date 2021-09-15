@@ -53,29 +53,26 @@ func (p *parser) parseLine(line string) {
 	case strings.HasPrefix(trimmed, "FAIL"):
 		// Do nothing.
 	case strings.Contains(trimmed, "[no test files]"):
-		// TODO(jbd): Annotate.
+		// Do nothing.
 	case strings.HasPrefix(trimmed, "--- SKIP"):
 		// TODO(jbd): Annotate.
 
-		// start segment
 	case strings.HasPrefix(trimmed, "=== RUN"):
-		p.start(trimmed)
+		// start span
+		p.startSpanForLine(trimmed)
 
-		// finished
 	case strings.HasPrefix(trimmed, "--- PASS"):
-		fallthrough
-	case strings.HasPrefix(trimmed, "ok"):
-		p.end(trimmed, false)
+		// end span
+		p.endSpanForLine(trimmed, false)
 
-		// failed
 	case strings.HasPrefix(trimmed, "--- FAIL"):
-		// end segment with error
-		p.end(trimmed, true)
+		// end span with error
+		p.endSpanForLine(trimmed, true)
 	}
 
 }
 
-func (p *parser) start(line string) error {
+func (p *parser) startSpanForLine(line string) error {
 	name := parseName(line)
 	_, span := p.tracer.Start(p.globalCtx, name)
 	collectedSpans[name] = &spanData{
@@ -85,7 +82,7 @@ func (p *parser) start(line string) error {
 	return nil
 }
 
-func (p *parser) end(line string, errored bool) {
+func (p *parser) endSpanForLine(line string, errored bool) {
 	name, dur := parseNameAndDuration(line)
 	data, ok := collectedSpans[name]
 	if !ok {
