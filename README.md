@@ -5,7 +5,10 @@ distributed traces.
 
 Generated traces are exported in OTLP to a
 [OpenTelemetry collector](https://github.com/open-telemetry/opentelemetry-collector).
-You need to run go-test-trace alongside a collector to export data.
+You need to run go-test-trace alongside a collector to export data to
+distributed tracing service.
+
+![Honeycomb](https://i.imgur.com/E18PYk4.png)
 
 ## Installation
 
