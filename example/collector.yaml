@@ -1,0 +1,22 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+processors:
+exporters:
+  awsxrayexporter:
+  otlp:
+    endpoint: api.honeycomb.io:443
+    headers:
+      "x-honeycomb-team": "<INSERT WRITE KEY>"
+      "x-honeycomb-dataset": "<INSERT DATASET>"
+  logging:
+    loglevel: debug
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: []
+      exporters: [logging, otlp]

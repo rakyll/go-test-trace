@@ -5,6 +5,7 @@ distributed traces.
 
 Generated traces are exported in OTLP to a
 [OpenTelemetry collector](https://github.com/open-telemetry/opentelemetry-collector).
+You need to run go-test-trace alongside a collector to export data.
 
 ## Installation
 
@@ -81,3 +82,20 @@ You can export to any collector by using the endpoint option:
 $ go-test-trace ./example -endpoint=my-otel-collector.io:9090
 ...
 ```
+
+## Running the collector
+
+An example collector configuration is available at example/collector.yaml.
+Please edit the write key and data set before use.
+Then, you can run the collector locally by the following command
+and export the traces to Honeycomb:
+
+```
+$ docker run --rm -p 4317:4317 -p 55680:55680 -p 8888:8888 \
+    -v "${PWD}/example/collector.yaml":/collector.yaml \
+    --name awscollector public.ecr.aws/aws-observability/aws-otel-collector:latest \
+    --config collector.yaml;
+```
+
+You can use any configuration supported by [ADOT](https://github.com/aws-observability/aws-otel-collector)
+or export to any other OpenTelemetry collector.
