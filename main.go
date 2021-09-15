@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// gotest is a tiny program that shells out to `go test`
-// and prints the output in color.
+// go-test-trace is a tiny program that generates OpenTelemetry
+// traces when testing a Go package.
 package main
 
 import (
@@ -38,8 +38,7 @@ func main() {
 	flag.Parse()
 
 	ctx := context.Background()
-	traceExporter, err := otlptracegrpc.New(
-		ctx,
+	traceExporter, err := otlptracegrpc.New(ctx,
 		otlptracegrpc.WithInsecure(),
 		otlptracegrpc.WithEndpoint(*endpoint),
 		otlptracegrpc.WithDialOption(grpc.WithBlock()),
@@ -114,12 +113,7 @@ func main() {
 		}
 	}()
 
-	err = cmd.Run()
-	oteltrace.SpanFromContext(globalCtx).End()
-	if err := tracerProvider.Shutdown(context.Background()); err != nil {
-		log.Printf("Failed shutting down the tracer provider: %v", err)
-	}
-	if err != nil {
+	if err = cmd.Run(); err != nil {
 		os.Exit(1)
 	}
 }
