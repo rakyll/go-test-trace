@@ -35,10 +35,12 @@ type spanData struct {
 var collectedSpans = make(map[string]*spanData, 1000)
 
 func main() {
-	endpoint := flag.String("endpoint", "127.0.0.1:55680", "OpenTelemetry gRPC endpoint to send traces")
-	stdin := flag.Bool("stdin", false, "read from stdin")
-	traceparent := flag.String("traceparent", "", "parent trace context if any")
-	flag.Parse()
+	fset := flag.NewFlagSet("", flag.ContinueOnError)
+	endpoint := fset.String("endpoint", "127.0.0.1:55680", "OpenTelemetry gRPC endpoint to send traces")
+	stdin := fset.Bool("stdin", false, "read from stdin")
+	traceparent := fset.String("traceparent", "", "parent trace context if any")
+	fset.Usage = func() {} // pass all arguments to go test
+	fset.Parse(os.Args[1:])
 
 	ctx := context.Background()
 	traceExporter, err := otlptracegrpc.New(ctx,
@@ -89,7 +91,7 @@ func main() {
 	}
 
 	// Otherwise, act like a drop-in replacement for `go test`.
-	args := append([]string{"test"}, flag.Args()...)
+	args := append([]string{"test"}, fset.Args()...)
 	args = append(args, "-json")
 	cmd := exec.Command("go", args...)
 
