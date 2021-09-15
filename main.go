@@ -17,11 +17,11 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
@@ -47,7 +47,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	res, err := resource.New(ctx, resource.WithAttributes(attribute.String("service.name", "go test")))
+	res, err := resource.New(ctx, resource.WithAttributes(
+		semconv.ServiceNameKey.String("go test"),
+	))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -58,8 +60,9 @@ func main() {
 	)
 	otel.SetTracerProvider(tracerProvider)
 
-	t := otel.Tracer("go-test-tracer")
-	globalCtx, _ := t.Start(ctx, "go-test-trace")
+	const name = "go-test-trace"
+	t := otel.Tracer(name)
+	globalCtx, _ := t.Start(ctx, name)
 
 	defer func() {
 		oteltrace.SpanFromContext(globalCtx).End()
