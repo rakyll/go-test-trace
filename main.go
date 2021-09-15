@@ -86,8 +86,8 @@ func trace(args []string) error {
 		propagation := propagation.TraceContext{}
 		ctx = propagation.Extract(ctx, &carrier{traceparent: traceparent})
 	}
-	globalCtx, globalSpan := t.Start(ctx, name)
 
+	globalCtx, globalSpan := t.Start(ctx, name)
 	defer func() {
 		globalSpan.End()
 		if err := tracerProvider.Shutdown(context.Background()); err != nil {
