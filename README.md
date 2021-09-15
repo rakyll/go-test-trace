@@ -19,8 +19,8 @@ go get -u github.com/rakyll/go-test-trace
 ## Usage
 
 You can use go-test-trace as a drop-in replacement for go test.
-It will generate a distributed trace and export it to a collector
-available at "127.0.0.1:55680".
+The following example will generate a distributed trace
+and export it to a collector available at "127.0.0.1:55680".
 
 ```
 $ go-test-trace ./example
@@ -50,14 +50,14 @@ make: *** [default] Error 1
 
 Alternatively, you can use -stdin option to parse
 the output of go test. This option won't be as accurate
-in terms of timing because it will generate trace spans
-as it sees output in the stdin.
+in terms of timestamps because it will generate trace spans
+as it sees output in stdin.
 
 ```
 $ go test -v ./example | go-test-trace -stdin
 ```
 
-You can export to any collector by using the endpoint option:
+You can export to any collector by using the endpoint flag:
 
 ```
 $ go-test-trace ./example -endpoint=my-otel-collector.io:9090
