@@ -27,15 +27,15 @@ import (
 	"google.golang.org/grpc"
 )
 
-type spanData struct {
-	span      oteltrace.Span
-	startTime time.Time
-}
-
 var (
 	endpoint string
 	stdin    bool
 )
+
+type spanData struct {
+	span      oteltrace.Span
+	startTime time.Time
+}
 
 var collectedSpans = make(map[string]*spanData, 1000)
 
