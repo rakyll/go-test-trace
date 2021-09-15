@@ -73,7 +73,10 @@ $ go-test-trace ./example -traceparent=00-0af7651916cd43dd8448eb211c80319c-b7ad6
 ## Running the collector
 
 An example collector configuration is available at example/collector.yaml.
-Please edit the write key and data set before use.
+It exports to Honeycomb but you can choose to any other destination by
+changing the configuration. Please edit the write key and data set
+with your details from Honeycomb before using it.
+
 Then, you can run the collector locally by the following command
 and export the traces to Honeycomb:
 
