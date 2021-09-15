@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -19,7 +20,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -32,68 +32,71 @@ type spanData struct {
 	startTime time.Time
 }
 
+var (
+	endpoint string
+	stdin    bool
+)
+
 var collectedSpans = make(map[string]*spanData, 1000)
 
 func main() {
 	fset := flag.NewFlagSet("", flag.ContinueOnError)
-	endpoint := fset.String("endpoint", "127.0.0.1:55680", "OpenTelemetry gRPC endpoint to send traces")
-	stdin := fset.Bool("stdin", false, "read from stdin")
-	traceparent := fset.String("traceparent", "", "parent trace context if any")
+	fset.StringVar(&endpoint, "endpoint", "127.0.0.1:55680", "OpenTelemetry gRPC endpoint to send traces")
+	fset.BoolVar(&stdin, "stdin", false, "read from stdin")
 	fset.Usage = func() {} // pass all arguments to go test
 	fset.Parse(os.Args[1:])
 
+	if err := trace(fset.Args()); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func trace(args []string) error {
 	ctx := context.Background()
 	traceExporter, err := otlptracegrpc.New(ctx,
 		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(*endpoint),
+		otlptracegrpc.WithEndpoint(endpoint),
 		otlptracegrpc.WithDialOption(grpc.WithBlock()),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	res, err := resource.New(ctx, resource.WithAttributes(
 		semconv.ServiceNameKey.String("go test"),
 	))
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithSpanProcessor(sdktrace.NewBatchSpanProcessor(traceExporter)),
+		sdktrace.WithSpanProcessor(sdktrace.NewSimpleSpanProcessor(traceExporter)),
 		sdktrace.WithResource(res),
 	)
 	otel.SetTracerProvider(tracerProvider)
-	if tp := *traceparent; tp != "" {
-		propagator := propagation.TraceContext{}
-		ctx = propagator.Extract(ctx, &carrier{tp})
-	}
 
 	const name = "go-test-trace"
 	t := otel.Tracer(name)
-	globalCtx, _ := t.Start(ctx, name)
+	globalCtx, span := t.Start(ctx, name)
 
 	defer func() {
-		oteltrace.SpanFromContext(globalCtx).End()
+		span.End()
 		if err := tracerProvider.Shutdown(context.Background()); err != nil {
 			log.Printf("Failed shutting down the tracer provider: %v", err)
 		}
 	}()
 
-	if *stdin {
+	if stdin {
 		p, err := newParser(globalCtx, t)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
-		if err := p.parse(os.Stdin); err != nil {
-			log.Fatal(err)
-		}
-		return
+		return p.parse(os.Stdin)
 	}
 
 	// Otherwise, act like a drop-in replacement for `go test`.
-	args := append([]string{"test"}, fset.Args()...)
-	args = append(args, "-json")
-	cmd := exec.Command("go", args...)
+	goTestArgs := append([]string{"test"}, args...)
+	goTestArgs = append(goTestArgs, "-json")
+	cmd := exec.Command("go", goTestArgs...)
 
 	r, err := cmd.StdoutPipe()
 	if err != nil {
@@ -101,10 +104,13 @@ func main() {
 	}
 	decoder := json.NewDecoder(r)
 	go func() {
-		for {
+		for decoder.More() {
 			var data goTestJSON
 			if err := decoder.Decode(&data); err != nil {
-				log.Fatal(err)
+				if err == io.EOF {
+					return
+				}
+				log.Printf("Failed to decode JSON: %v", err)
 			}
 			switch data.Action {
 			case "run":
@@ -127,10 +133,7 @@ func main() {
 			fmt.Print(data.Output)
 		}
 	}()
-
-	if err = cmd.Run(); err != nil {
-		os.Exit(1)
-	}
+	return cmd.Run()
 }
 
 type goTestJSON struct {
