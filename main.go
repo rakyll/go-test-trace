@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -36,6 +37,7 @@ var collectedSpans = make(map[string]*spanData, 1000)
 func main() {
 	endpoint := flag.String("endpoint", "127.0.0.1:55680", "OpenTelemetry gRPC endpoint to send traces")
 	stdin := flag.Bool("stdin", false, "read from stdin")
+	traceparent := flag.String("traceparent", "", "parent trace context if any")
 	flag.Parse()
 
 	ctx := context.Background()
@@ -59,6 +61,10 @@ func main() {
 		sdktrace.WithResource(res),
 	)
 	otel.SetTracerProvider(tracerProvider)
+	if tp := *traceparent; tp != "" {
+		propagator := propagation.TraceContext{}
+		ctx = propagator.Extract(ctx, &carrier{tp})
+	}
 
 	const name = "go-test-trace"
 	t := otel.Tracer(name)
@@ -130,4 +136,21 @@ type goTestJSON struct {
 	Action string
 	Test   string
 	Output string
+}
+
+type carrier struct{ traceparent string }
+
+func (c *carrier) Get(key string) string {
+	if key == "traceparent" {
+		return c.traceparent
+	}
+	return ""
+}
+
+func (c *carrier) Set(key string, value string) {
+	panic("not implemented")
+}
+
+func (c *carrier) Keys() []string {
+	return []string{"traceparent"}
 }

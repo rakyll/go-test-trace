@@ -63,6 +63,13 @@ You can export to any collector by using the endpoint flag:
 $ go-test-trace ./example -endpoint=my-otel-collector.io:9090
 ```
 
+You can make the go-test-trace to participate into an existing
+trace with the traceparent flag.
+
+```
+$ go-test-trace ./example -traceparent=00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01
+```
+
 ## Running the collector
 
 An example collector configuration is available at example/collector.yaml.
