@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -28,8 +29,9 @@ import (
 )
 
 var (
-	endpoint string
-	stdin    bool
+	endpoint    string
+	stdin       bool
+	traceparent string
 )
 
 type spanData struct {
@@ -43,7 +45,8 @@ func main() {
 	fset := flag.NewFlagSet("", flag.ContinueOnError)
 	fset.StringVar(&endpoint, "endpoint", "127.0.0.1:55680", "OpenTelemetry gRPC endpoint to send traces")
 	fset.BoolVar(&stdin, "stdin", false, "read from stdin")
-	fset.Usage = func() {} // pass all arguments to go test
+	fset.StringVar(&traceparent, "traceparent", "", "trace to participate into if any")
+	fset.Usage = func() {} // don't error instead pass remaining arguments to go test
 	fset.Parse(os.Args[1:])
 
 	if err := trace(fset.Args()); err != nil {
@@ -76,10 +79,17 @@ func trace(args []string) error {
 
 	const name = "go-test-trace"
 	t := otel.Tracer(name)
-	globalCtx, span := t.Start(ctx, name)
+
+	// If there is a parent trace, participate into it.
+	// If not, create a new root span.
+	if traceparent != "" {
+		propagation := propagation.TraceContext{}
+		ctx = propagation.Extract(ctx, &carrier{traceparent: traceparent})
+	}
+	globalCtx, globalSpan := t.Start(ctx, name)
 
 	defer func() {
-		span.End()
+		globalSpan.End()
 		if err := tracerProvider.Shutdown(context.Background()); err != nil {
 			log.Printf("Failed shutting down the tracer provider: %v", err)
 		}
