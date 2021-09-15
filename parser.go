@@ -78,7 +78,7 @@ func (p *parser) parseLine(line string) {
 func (p *parser) start(line string) error {
 	name := parseName(line)
 	_, span := p.tracer.Start(p.globalCtx, name)
-	danglingSpans[name] = &spanData{
+	collectedSpans[name] = &spanData{
 		span:      span,
 		startTime: time.Now(),
 	}
@@ -87,7 +87,7 @@ func (p *parser) start(line string) error {
 
 func (p *parser) end(line string, errored bool) {
 	name, dur := parseNameAndDuration(line)
-	data, ok := danglingSpans[name]
+	data, ok := collectedSpans[name]
 	if !ok {
 		return
 	}

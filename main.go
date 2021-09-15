@@ -31,7 +31,7 @@ type spanData struct {
 	startTime time.Time
 }
 
-var danglingSpans = make(map[string]*spanData, 1000)
+var collectedSpans = make(map[string]*spanData, 1000)
 
 func main() {
 	endpoint := flag.String("endpoint", "127.0.0.1:55680", "OpenTelemetry gRPC endpoint to send traces")
@@ -102,12 +102,12 @@ func main() {
 			case "run":
 				var span oteltrace.Span
 				_, span = t.Start(globalCtx, data.Test, oteltrace.WithTimestamp(data.Time))
-				danglingSpans[data.Test] = &spanData{
+				collectedSpans[data.Test] = &spanData{
 					span:      span,
 					startTime: data.Time,
 				}
 			case "pass", "fail", "skip":
-				spanData, ok := danglingSpans[data.Test]
+				spanData, ok := collectedSpans[data.Test]
 				if !ok {
 					return // should never happen
 				}
