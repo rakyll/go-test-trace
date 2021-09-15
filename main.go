@@ -115,7 +115,7 @@ func trace(args []string) error {
 	decoder := json.NewDecoder(r)
 	go func() {
 		for decoder.More() {
-			var data goTestJSON
+			var data goTestOutput
 			if err := decoder.Decode(&data); err != nil {
 				if err == io.EOF {
 					return
@@ -146,7 +146,7 @@ func trace(args []string) error {
 	return cmd.Run()
 }
 
-type goTestJSON struct {
+type goTestOutput struct {
 	Time   time.Time
 	Action string
 	Test   string
