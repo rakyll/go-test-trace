@@ -1,3 +1,8 @@
+# You can modify this file with any component
+# available at https://github.com/aws-observability/aws-otel-collector#aws-otel-collector-built-in-components.
+# If you want to use components not supported
+# in this distribution, please feel free to use your
+# own distribution.
 receivers:
   otlp:
     protocols:
