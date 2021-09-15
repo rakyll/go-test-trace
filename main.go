@@ -30,6 +30,7 @@ import (
 
 var (
 	endpoint    string
+	name        string
 	stdin       bool
 	traceparent string
 )
@@ -44,6 +45,7 @@ var collectedSpans = make(map[string]*spanData, 1000)
 func main() {
 	fset := flag.NewFlagSet("", flag.ContinueOnError)
 	fset.StringVar(&endpoint, "endpoint", "127.0.0.1:55680", "OpenTelemetry gRPC endpoint to send traces")
+	fset.StringVar(&name, "name", "go-test-trace", "The name of the parent span")
 	fset.BoolVar(&stdin, "stdin", false, "read from stdin")
 	fset.StringVar(&traceparent, "traceparent", "", "trace to participate into if any")
 	fset.Usage = func() {} // don't error instead pass remaining arguments to go test
@@ -76,8 +78,6 @@ func trace(args []string) error {
 		sdktrace.WithResource(res),
 	)
 	otel.SetTracerProvider(tracerProvider)
-
-	const name = "go-test-trace"
 	t := otel.Tracer(name)
 
 	// If there is a parent trace, participate into it.
