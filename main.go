@@ -115,7 +115,7 @@ func trace(args []string) error {
 	cmd := exec.Command("go", goTestArgs...)
 	cmd.Env = append(
 		os.Environ(),
-		fmt.Sprintf("GO_TRACE_TEST_TRACEPARENT=%q", globalSpan.SpanContext().TraceID()),
+		fmt.Sprintf("TRACEPARENT=%q", globalSpan.SpanContext().TraceID()),
 	)
 	r, err := cmd.StdoutPipe()
 	if err != nil {
