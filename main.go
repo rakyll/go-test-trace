@@ -33,6 +33,7 @@ var (
 	name        string
 	stdin       bool
 	traceparent string
+	help        bool
 )
 
 type spanData struct {
@@ -44,13 +45,18 @@ var collectedSpans = make(map[string]*spanData, 1000)
 
 func main() {
 	fset := flag.NewFlagSet("", flag.ContinueOnError)
-	fset.StringVar(&endpoint, "endpoint", "127.0.0.1:55680", "OpenTelemetry gRPC endpoint to send traces")
-	fset.StringVar(&name, "name", "go-test-trace", "The name of the parent span")
-	fset.BoolVar(&stdin, "stdin", false, "read from stdin")
-	fset.StringVar(&traceparent, "traceparent", "", "trace to participate into if any")
+	fset.StringVar(&endpoint, "endpoint", "127.0.0.1:55680", "")
+	fset.StringVar(&name, "name", "go-test-trace", "")
+	fset.BoolVar(&stdin, "stdin", false, "")
+	fset.BoolVar(&help, "help", false, "")
+	fset.StringVar(&traceparent, "traceparent", "", "")
 	fset.Usage = func() {} // don't error instead pass remaining arguments to go test
 	fset.Parse(os.Args[1:])
 
+	if help {
+		fmt.Println(usageText)
+		os.Exit(0)
+	}
 	if err := trace(fset.Args()); err != nil {
 		log.Fatal(err)
 	}
@@ -172,3 +178,15 @@ func (c *carrier) Set(key string, value string) {
 func (c *carrier) Keys() []string {
 	return []string{"traceparent"}
 }
+
+const usageText = `Usage:
+go-test-trace [flags...] [go test flags...]
+
+Flags:
+-name        Name of the trace span created for the test, optional.
+-endpoint    OpenTelemetry gRPC collector endpoint, 127.0.0.1:55680 by default.
+-traceparent Trace to participate into if any, in W3C Trace Context format.
+-stdin       Parse go test verbose output from stdin.
+-help        Print this text.
+
+Run "go help test" for go test flags.`
