@@ -1,5 +1,7 @@
 # go-test-trace
 
+[![CircleCI](https://circleci.com/gh/rakyll/go-test-trace/tree/main.svg?style=svg)](https://circleci.com/gh/rakyll/go-test-trace/tree/main)
+
 go-test-trace is like go test but it also generates
 distributed traces.
 
