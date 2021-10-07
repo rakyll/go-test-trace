@@ -62,14 +62,14 @@ $ go test -v ./example | go-test-trace -stdin
 You can export to any collector by using the endpoint flag:
 
 ```
-$ go-test-trace ./example -endpoint=my-otel-collector.io:9090
+$ go-test-trace -endpoint=my-otel-collector.io:9090 ./example
 ```
 
 You can make the go-test-trace to participate into an existing
 trace with the traceparent flag.
 
 ```
-$ go-test-trace ./example -traceparent=00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01
+$ go-test-trace -traceparent=00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01 ./example
 ```
 
 ## Running the collector
