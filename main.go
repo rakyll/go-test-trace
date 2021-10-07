@@ -139,6 +139,9 @@ func trace(args []string) error {
 					startTime: data.Time,
 				}
 			case "pass", "fail", "skip":
+				if data.Test == "" {
+					continue
+				}
 				spanData, ok := collectedSpans[data.Test]
 				if !ok {
 					return // should never happen
