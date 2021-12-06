@@ -22,7 +22,7 @@ go get -u github.com/rakyll/go-test-trace
 
 You can use go-test-trace as a drop-in replacement for go test.
 The following example will generate a distributed trace
-and export it to a collector available at "127.0.0.1:55680".
+and export it to a collector available at "127.0.0.1:4317".
 
 ```
 $ go-test-trace ./example
@@ -83,7 +83,7 @@ Then, you can run the collector locally by the following command
 and export the traces to Honeycomb:
 
 ```
-$ docker run --rm -p 4317:4317 -p 55680:55680 -p 8888:8888 \
+$ docker run --rm -p 4317:4317 -p 4318:4318 -p 8888:8888 \
     -v "${PWD}/example/collector.yaml":/collector.yaml \
     --name awscollector public.ecr.aws/aws-observability/aws-otel-collector:latest \
     --config collector.yaml;

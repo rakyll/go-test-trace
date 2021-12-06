@@ -44,7 +44,7 @@ var collectedSpans = make(map[string]*spanData, 1000)
 
 func main() {
 	fset := flag.NewFlagSet("", flag.ContinueOnError)
-	fset.StringVar(&endpoint, "endpoint", "127.0.0.1:55680", "")
+	fset.StringVar(&endpoint, "endpoint", "127.0.0.1:4317", "")
 	fset.StringVar(&name, "name", "go-test-trace", "")
 	fset.BoolVar(&stdin, "stdin", false, "")
 	fset.BoolVar(&help, "help", false, "")
@@ -186,7 +186,7 @@ go-test-trace [flags...] [go test flags...]
 
 Flags:
 -name        Name of the trace span created for the test, optional.
--endpoint    OpenTelemetry gRPC collector endpoint, 127.0.0.1:55680 by default.
+-endpoint    OpenTelemetry gRPC collector endpoint, 127.0.0.1:4317 by default.
 -traceparent Trace to participate into if any, in W3C Trace Context format.
 -stdin       Parse go test verbose output from stdin.
 -help        Print this text.
