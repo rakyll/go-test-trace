@@ -63,11 +63,16 @@ func main() {
 
 func trace(args []string) error {
 	ctx := context.Background()
-	traceExporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(endpoint),
-		otlptracegrpc.WithTimeout(100*time.Millisecond),
-	)
+	otlpOpts := []otlptracegrpc.Option{
+		otlptracegrpc.WithTimeout(100 * time.Millisecond),
+	}
+	if endpoint != "" {
+		otlpOpts = append(otlpOpts,
+			otlptracegrpc.WithInsecure(),
+			otlptracegrpc.WithEndpoint(endpoint),
+		)
+	}
+	traceExporter, err := otlptracegrpc.New(ctx, otlpOpts...)
 	if err != nil {
 		return err
 	}
