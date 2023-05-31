@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -36,6 +37,7 @@ var (
 )
 
 type spanData struct {
+	ctx       context.Context
 	span      oteltrace.Span
 	startTime time.Time
 }
@@ -130,19 +132,25 @@ func trace(args []string) error {
 				}
 				log.Printf("Failed to decode JSON: %v", err)
 			}
+
+			key := testKey(data.Package, data.Test)
 			switch data.Action {
+			case "start":
+				ctx, span := t.Start(globalCtx, data.Package, oteltrace.WithTimestamp(data.Time))
+				collectedSpans[key] = &spanData{
+					ctx:       ctx,
+					span:      span,
+					startTime: data.Time,
+				}
 			case "run":
-				var span oteltrace.Span
-				_, span = t.Start(globalCtx, data.Test, oteltrace.WithTimestamp(data.Time))
-				collectedSpans[data.Test] = &spanData{
+				ctx, span := t.Start(parentContext(globalCtx, data.Package, data.Test), data.Test, oteltrace.WithTimestamp(data.Time))
+				collectedSpans[key] = &spanData{
+					ctx:       ctx,
 					span:      span,
 					startTime: data.Time,
 				}
 			case "pass", "fail", "skip":
-				if data.Test == "" {
-					continue
-				}
-				spanData, ok := collectedSpans[data.Test]
+				spanData, ok := collectedSpans[key]
 				if !ok {
 					return // should never happen
 				}
@@ -158,10 +166,41 @@ func trace(args []string) error {
 }
 
 type goTestOutput struct {
-	Time   time.Time
-	Action string
-	Test   string
-	Output string
+	Time    time.Time
+	Action  string
+	Package string
+	Test    string
+	Output  string
+}
+
+func testKey(pkg, test string) string {
+	if test == "" {
+		return pkg
+	}
+	return pkg + "." + test
+}
+
+func parentContext(ctx context.Context, pkg, test string) context.Context {
+	// For a test "a/b/c" try to take parent "a/b" then "a".
+	until := len(test)
+	for {
+		sep := strings.LastIndex(test[:until], "/")
+		if sep == -1 {
+			break
+		}
+		until = sep
+		if testData, ok := collectedSpans[testKey(pkg, test[:until])]; ok {
+			return testData.ctx
+		}
+	}
+
+	// Try to use the parent's context.
+	if pkgData, ok := collectedSpans[pkg]; ok {
+		return pkgData.ctx
+	}
+
+	// Use the fallback context.
+	return ctx
 }
 
 type carrier struct{ traceparent string }
